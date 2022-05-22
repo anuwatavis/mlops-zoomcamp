@@ -14,6 +14,7 @@ from hyperopt.pyll import scope
 
 from prefect import flow, task
 
+
 @task
 def read_dataframe(filename):
     df = pd.read_parquet(filename)
@@ -31,12 +32,14 @@ def read_dataframe(filename):
 
     return df
 
+
 @task
 def add_features(df_train, df_val):
-    df_train['PU_DO'] = df_train['PULocationID'] + '_' + df_train['DOLocationID']
+    df_train['PU_DO'] = df_train['PULocationID'] + \
+        '_' + df_train['DOLocationID']
     df_val['PU_DO'] = df_val['PULocationID'] + '_' + df_val['DOLocationID']
 
-    categorical = ['PU_DO'] #'PULocationID', 'DOLocationID']
+    categorical = ['PU_DO']  # 'PULocationID', 'DOLocationID']
     numerical = ['trip_distance']
 
     dv = DictVectorizer()
@@ -46,7 +49,6 @@ def add_features(df_train, df_val):
 
     val_dicts = df_val[categorical + numerical].to_dict(orient='records')
     X_val = dv.transform(val_dicts)
-
 
     target = 'duration'
     y_train = df_train[target].values
@@ -83,6 +85,7 @@ def add_features(df_train, df_val):
 #         mlflow.log_metric("rmse", rmse)
 
 #         mlflow.log_artifact(local_path="models/lin_reg.bin", artifact_path="models_pickle")
+
 
 @task
 def train_model_search(train, valid, y_val):
@@ -122,10 +125,11 @@ def train_model_search(train, valid, y_val):
     )
     return best_result
 
+
 @task
 def train_best_model(X_train, X_val, y_train, y_val, dv):
     with mlflow.start_run():
-        
+
         train = xgb.DMatrix(X_train, label=y_train)
         valid = xgb.DMatrix(X_val, label=y_val)
 
@@ -155,39 +159,29 @@ def train_best_model(X_train, X_val, y_train, y_val, dv):
 
         with open("models/preprocessor.b", "wb") as f_out:
             pickle.dump(dv, f_out)
-        mlflow.log_artifact("models/preprocessor.b", artifact_path="preprocessor")
+        mlflow.log_artifact("models/preprocessor.b",
+                            artifact_path="preprocessor")
 
         mlflow.xgboost.log_model(booster, artifact_path="models_mlflow")
 
+
 @flow
-def main_flow(train_path: str = './data/green_tripdata_2021-01.parquet', 
-                val_path: str = './data/green_tripdata_2021-02.parquet'):
+def main_flow():
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("nyc-taxi-experiment")
     # Load
-    df_train = read_dataframe(train_path)
-    df_val = read_dataframe(val_path)
+    df_train = read_dataframe('./data/green_tripdata_2021-01.parquet')
+    df_val = read_dataframe('./data/green_tripdata_2021-02.parquet')
 
     # Transform
-    X_train, X_val, y_train, y_val, dv = add_features(df_train, df_val).result()
+    X_train, X_val, y_train, y_val, dv = add_features(
+        df_train, df_val).result()
 
     # Training
     train = xgb.DMatrix(X_train, label=y_train)
     valid = xgb.DMatrix(X_val, label=y_val)
-    best = train_model_search(train, valid, y_val)
-    train_best_model(X_train, X_val, y_train, y_val, dv, wait_for=best)
+    train_model_search(train, valid, y_val)
+    train_best_model(X_train, X_val, y_train, y_val, dv)
 
-# main_flow()
 
-from prefect.deployments import DeploymentSpec
-from prefect.orion.schemas.schedules import IntervalSchedule
-from prefect.flow_runners import SubprocessFlowRunner
-from datetime import timedelta
-
-DeploymentSpec(
-    flow=main_flow,
-    name="model_training",
-    # schedule=IntervalSchedule(interval=timedelta(weeks=1)),
-    flow_runner=SubprocessFlowRunner(),
-    tags=["ml"],
-)
+main_flow()
