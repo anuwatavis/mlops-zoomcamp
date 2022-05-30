@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## 3.6 Homework
 
 The goal of this homework is to familiarize users with workflow orchestration. We start from the solution of homework 1. The notebook can be found below:
@@ -215,3 +216,6 @@ The deadline for submitting is 11 June 2022 (Saturday) at 23:00 CEST. After that
 ## Solution
 
 After the deadline, we'll post the solution here
+=======
+Coming soon
+>>>>>>> 1d27f87 (new videos)
