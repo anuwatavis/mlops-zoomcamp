@@ -42,9 +42,11 @@ def train_and_log_model(data_path, params):
         rf.fit(X_train, y_train)
 
         # evaluate model on the validation and test sets
-        valid_rmse = mean_squared_error(y_valid, rf.predict(X_valid), squared=False)
+        valid_rmse = mean_squared_error(
+            y_valid, rf.predict(X_valid), squared=False)
         mlflow.log_metric("valid_rmse", valid_rmse)
-        test_rmse = mean_squared_error(y_test, rf.predict(X_test), squared=False)
+        test_rmse = mean_squared_error(
+            y_test, rf.predict(X_test), squared=False)
         mlflow.log_metric("test_rmse", test_rmse)
 
 
@@ -60,15 +62,21 @@ def run(data_path, log_top):
         max_results=log_top,
         order_by=["metrics.rmse ASC"]
     )
-    for run in runs:
+
+    for run in runs[0:1]:
+
         train_and_log_model(data_path=data_path, params=run.data.params)
 
-    # select the model with the lowest test RMSE
+    # # select the model with the lowest test RMSE
     experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
-    # best_run = client.search_runs( ...  )[0]
+    best_run = client.search_runs(experiment_ids=experiment.experiment_id,
+                                  run_view_type=ViewType.ACTIVE_ONLY,
+                                  max_results=log_top,
+                                  order_by=["metrics.rmse ASC"])[0]
 
-    # register the best model
-    # mlflow.register_model( ... )
+    model_uri = f"runs:/{best_run.info.run_id}/model"
+    mlflow.register_model(model_uri=model_uri,
+                          name='random-forest-regressor')
 
 
 if __name__ == '__main__':
