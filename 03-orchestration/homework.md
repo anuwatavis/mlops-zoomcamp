@@ -218,4 +218,8 @@ The deadline for submitting is 11 June 2022 (Saturday) at 23:00 CEST. After that
 After the deadline, we'll post the solution here
 =======
 Coming soon
+<<<<<<< HEAD
 >>>>>>> 1d27f87 (new videos)
+=======
+>>>>>>> 581dcd0 (new videos)
+>>>>>>> 098342d (new videos)
