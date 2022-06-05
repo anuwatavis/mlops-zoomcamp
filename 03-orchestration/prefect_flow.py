@@ -16,6 +16,7 @@ import mlflow
 from prefect import flow, task
 from prefect.task_runners import SequentialTaskRunner
 
+
 @task
 def read_dataframe(filename):
     df = pd.read_parquet(filename)
@@ -30,8 +31,9 @@ def read_dataframe(filename):
 
     categorical = ['PULocationID', 'DOLocationID']
     df[categorical] = df[categorical].astype(str)
-    
+
     return df
+
 
 @task
 def add_features(df_train, df_val):
@@ -41,10 +43,11 @@ def add_features(df_train, df_val):
     print(len(df_train))
     print(len(df_val))
 
-    df_train['PU_DO'] = df_train['PULocationID'] + '_' + df_train['DOLocationID']
+    df_train['PU_DO'] = df_train['PULocationID'] + \
+        '_' + df_train['DOLocationID']
     df_val['PU_DO'] = df_val['PULocationID'] + '_' + df_val['DOLocationID']
 
-    categorical = ['PU_DO'] #'PULocationID', 'DOLocationID']
+    categorical = ['PU_DO']  # 'PULocationID', 'DOLocationID']
     numerical = ['trip_distance']
 
     dv = DictVectorizer()
@@ -60,6 +63,7 @@ def add_features(df_train, df_val):
     y_val = df_val[target].values
 
     return X_train, X_val, y_train, y_val, dv
+
 
 @task
 def train_model_search(train, valid, y_val):
@@ -99,6 +103,7 @@ def train_model_search(train, valid, y_val):
     )
     return
 
+
 @task
 def train_best_model(train, valid, y_val, dv):
     with mlflow.start_run():
@@ -129,13 +134,17 @@ def train_best_model(train, valid, y_val, dv):
 
         with open("models/preprocessor.b", "wb") as f_out:
             pickle.dump(dv, f_out)
-        mlflow.log_artifact("models/preprocessor.b", artifact_path="preprocessor")
+        mlflow.log_artifact("models/preprocessor.b",
+                            artifact_path="preprocessor")
 
         mlflow.xgboost.log_model(booster, artifact_path="models_mlflow")
 
+
+# by default prefect will run task in async mode
+# flow_runner=ConcurrentTaskRunner()
 @flow(task_runner=SequentialTaskRunner())
-def main(train_path: str="./data/green_tripdata_2021-01.parquet",
-        val_path: str="./data/green_tripdata_2021-02.parquet"):
+def main(train_path: str = "./data/green_tripdata_2021-01.parquet",
+         val_path: str = "./data/green_tripdata_2021-02.parquet"):
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("nyc-taxi-experiment")
     X_train = read_dataframe(train_path)
@@ -145,3 +154,4 @@ def main(train_path: str="./data/green_tripdata_2021-01.parquet",
     valid = xgb.DMatrix(X_val, label=y_val)
     train_model_search(train, valid, y_val)
     train_best_model(train, valid, y_val, dv)
+main()
