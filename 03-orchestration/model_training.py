@@ -1,20 +1,19 @@
-from audioop import add
-import pandas as pd
 import pickle
-
-from sklearn.feature_extraction import DictVectorizer
-from sklearn.linear_model import LinearRegression, Lasso, Ridge
-from sklearn.metrics import mean_squared_error
-
-import xgboost as xgb
-
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
-from hyperopt.pyll import scope
+from audioop import add
+from pathlib import Path
 
 import mlflow
+import pandas as pd
+import xgboost as xgb
+from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
+from hyperopt.pyll import scope
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.linear_model import Lasso, LinearRegression, Ridge
+from sklearn.metrics import mean_squared_error
 
 mlflow.set_tracking_uri("sqlite:///mlflow.db")
 mlflow.set_experiment("nyc-taxi-experiment")
+
 
 def read_dataframe(filename):
     df = pd.read_parquet(filename)
@@ -29,21 +28,24 @@ def read_dataframe(filename):
 
     categorical = ['PULocationID', 'DOLocationID']
     df[categorical] = df[categorical].astype(str)
-    
+
     return df
+
 
 def add_features(train_path="./data/green_tripdata_2021-01.parquet",
                  val_path="./data/green_tripdata_2021-02.parquet"):
+    print(f"{add_features.__name__} running...")
     df_train = read_dataframe(train_path)
     df_val = read_dataframe(val_path)
 
     print(len(df_train))
     print(len(df_val))
 
-    df_train['PU_DO'] = df_train['PULocationID'] + '_' + df_train['DOLocationID']
+    df_train['PU_DO'] = df_train['PULocationID'] + \
+        '_' + df_train['DOLocationID']
     df_val['PU_DO'] = df_val['PULocationID'] + '_' + df_val['DOLocationID']
 
-    categorical = ['PU_DO'] #'PULocationID', 'DOLocationID']
+    categorical = ['PU_DO']  # 'PULocationID', 'DOLocationID']
     numerical = ['trip_distance']
 
     dv = DictVectorizer()
@@ -90,6 +92,7 @@ def add_features(train_path="./data/green_tripdata_2021-01.parquet",
 
 #     mlflow.log_artifact(local_path="models/lin_reg.bin", artifact_path="models_pickle")
 
+
 def train_model_search(train, valid, y_val):
     def objective(params):
         with mlflow.start_run():
@@ -127,9 +130,10 @@ def train_model_search(train, valid, y_val):
     )
     return
 
+
 def train_best_model(train, valid, y_val, dv):
     with mlflow.start_run():
-        
+
         train = xgb.DMatrix(X_train, label=y_train)
         valid = xgb.DMatrix(X_val, label=y_val)
 
@@ -148,7 +152,7 @@ def train_best_model(train, valid, y_val, dv):
         booster = xgb.train(
             params=best_params,
             dtrain=train,
-            num_boost_round=1000,
+            num_boost_round=500,
             evals=[(valid, 'validation')],
             early_stopping_rounds=50
         )
@@ -156,12 +160,16 @@ def train_best_model(train, valid, y_val, dv):
         y_pred = booster.predict(valid)
         rmse = mean_squared_error(y_val, y_pred, squared=False)
         mlflow.log_metric("rmse", rmse)
+        # Create models directory
+        Path.mkdir(Path.cwd() / "models", parents=True, exist_ok=True)
 
         with open("models/preprocessor.b", "wb") as f_out:
             pickle.dump(dv, f_out)
-        mlflow.log_artifact("models/preprocessor.b", artifact_path="preprocessor")
+        mlflow.log_artifact("models/preprocessor.b",
+                            artifact_path="preprocessor")
 
         mlflow.xgboost.log_model(booster, artifact_path="models_mlflow")
+
 
 if __name__ == "__main__":
     X_train, X_val, y_train, y_val, dv = add_features()
