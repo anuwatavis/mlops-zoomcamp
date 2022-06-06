@@ -4,5 +4,9 @@ models/*
 mlruns/*
 .vscode/
 ./DS_Store
+<<<<<<< HEAD
 *.db
 *.DS_Store
+=======
+*.db
+>>>>>>> 087c0d2 (orchestration first pass)

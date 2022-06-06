@@ -1,7 +1,3 @@
-from prefect.deployments import DeploymentSpec
-from datetime import timedelta
-from prefect.flow_runners import SubprocessFlowRunner
-from prefect.orion.schemas.schedules import IntervalSchedule
 import pandas as pd
 import pickle
 
@@ -59,6 +55,36 @@ def add_features(df_train, df_val):
     y_val = df_val[target].values
     return X_train, X_val, y_train, y_val, dv
 
+# def create_lr(X_train, X_val, y_train, y_val, dv):
+#     lr = LinearRegression()
+#     lr.fit(X_train, y_train)
+
+#     y_pred = lr.predict(X_val)
+
+#     mean_squared_error(y_val, y_pred, squared=False)
+
+#     with open('models/lin_reg.bin', 'wb') as f_out:
+#         pickle.dump((dv, lr), f_out)
+
+# def create_lasso(X_train, X_val, y_train, y_val):
+
+#     with mlflow.start_run():
+
+#         mlflow.set_tag("developer", "cristian")
+
+#         mlflow.log_param("train-data-path", "./data/green_tripdata_2021-01.parquet")
+#         mlflow.log_param("valid-data-path", "./data/green_tripdata_2021-02.parquet")
+
+#         alpha = 0.1
+#         mlflow.log_param("alpha", alpha)
+#         lr = Lasso(alpha)
+#         lr.fit(X_train, y_train)
+
+#         y_pred = lr.predict(X_val)
+#         rmse = mean_squared_error(y_val, y_pred, squared=False)
+#         mlflow.log_metric("rmse", rmse)
+
+#         mlflow.log_artifact(local_path="models/lin_reg.bin", artifact_path="models_pickle")
 
 
 @task
@@ -140,13 +166,12 @@ def train_best_model(X_train, X_val, y_train, y_val, dv):
 
 
 @flow
-def main_flow(train_path: str = './data/green_tripdata_2021-01.parquet', 
-                val_path: str = './data/green_tripdata_2021-02.parquet'):
+def main_flow():
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("nyc-taxi-experiment")
     # Load
-    df_train = read_dataframe(train_path)
-    df_val = read_dataframe(val_path)
+    df_train = read_dataframe('./data/green_tripdata_2021-01.parquet')
+    df_val = read_dataframe('./data/green_tripdata_2021-02.parquet')
 
     # Transform
     X_train, X_val, y_train, y_val, dv = add_features(
@@ -155,16 +180,8 @@ def main_flow(train_path: str = './data/green_tripdata_2021-01.parquet',
     # Training
     train = xgb.DMatrix(X_train, label=y_train)
     valid = xgb.DMatrix(X_val, label=y_val)
-    best = train_model_search(train, valid, y_val)
-    train_best_model(X_train, X_val, y_train, y_val, dv, wait_for=best)
-
-# main_flow()
+    train_model_search(train, valid, y_val)
+    train_best_model(X_train, X_val, y_train, y_val, dv)
 
 
-DeploymentSpec(
-    flow=main_flow,
-    name="model_training",
-    # schedule=IntervalSchedule(interval=timedelta(weeks=1)),
-    flow_runner=SubprocessFlowRunner(),
-    tags=["ml"],
-)
+main_flow()
